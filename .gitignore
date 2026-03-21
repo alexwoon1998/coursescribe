@@ -1,0 +1,6 @@
+licence-server/.env
+__pycache__/
+*.pyc
+*.pyo
+*.db
+.vscode/

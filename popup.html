@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CourseScribe</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <img src="icons/icon48.png" alt="CourseScribe" class="logo" />
+    <div class="header-text">
+      <h1>CourseScribe</h1>
+      <p class="tagline">Coursera Transcript Extractor</p>
+    </div>
+  </div>
+
+  <!-- Licence status bar -->
+  <div class="licence-bar" id="licenceBar">
+    <span id="licenceStatus">🔓 Free — <span id="videoCount">0</span> / 20 videos used</span>
+    <button class="unlock-btn" id="unlockBtn">Unlock Unlimited</button>
+  </div>
+
+  <!-- Licence key input (hidden until user clicks Unlock) -->
+  <div class="licence-input-section" id="licenceInputSection" style="display:none;">
+    <input type="text" id="licenceKeyInput" placeholder="Enter your licence key" />
+    <button class="verify-btn" id="verifyBtn">Verify</button>
+    <p class="licence-hint">
+      Don't have a key? <a href="https://gumroad.com" target="_blank">Get one for $20 →</a>
+    </p>
+  </div>
+
+  <!-- Main controls -->
+  <div class="section">
+    <label class="section-label">Output Format</label>
+    <div class="format-group">
+      <label class="format-option">
+        <input type="radio" name="format" value="docx" checked /> DOCX
+      </label>
+      <label class="format-option">
+        <input type="radio" name="format" value="pdf" /> PDF
+      </label>
+      <label class="format-option">
+        <input type="radio" name="format" value="txt" /> TXT
+      </label>
+    </div>
+  </div>
+
+  <div class="section">
+    <label class="section-label">Advance Mode</label>
+    <div class="toggle-row">
+      <span class="toggle-label">Manual</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="autoToggle" />
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Auto</span>
+    </div>
+    <p class="mode-hint" id="modeHint">Click "Next Video" yourself after each extraction.</p>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="actions">
+    <button class="btn-primary" id="extractBtn">Extract This Video</button>
+    <button class="btn-secondary" id="nextBtn" style="display:none;">Next Video →</button>
+    <button class="btn-danger" id="stopBtn" style="display:none;">Stop</button>
+  </div>
+
+  <!-- Progress log -->
+  <div class="log-section" id="logSection" style="display:none;">
+    <label class="section-label">Progress</label>
+    <div class="log-box" id="logBox"></div>
+    <button class="download-btn" id="downloadBtn" style="display:none;">
+      ⬇ Download All Files
+    </button>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <a href="https://github.com" target="_blank">View source on GitHub</a>
+  </div>
+
+  <script src="jszip.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
