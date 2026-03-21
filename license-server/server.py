@@ -3,8 +3,6 @@
 
 import os
 import uuid
-import hmac
-import hashlib
 import sqlite3
 from datetime import datetime
 
@@ -18,10 +16,9 @@ load_dotenv()
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-GUMROAD_WEBHOOK_SECRET = os.getenv("GUMROAD_WEBHOOK_SECRET")
-RESEND_API_KEY          = os.getenv("RESEND_API_KEY")
-FROM_EMAIL              = os.getenv("FROM_EMAIL", "noreply@coursescribe.app")
-DB_PATH                 = os.getenv("DB_PATH", "licences.db")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+FROM_EMAIL     = os.getenv("FROM_EMAIL", "noreply@alexhzwoon.cc")
+DB_PATH        = os.getenv("DB_PATH", "licences.db")
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 
@@ -32,6 +29,7 @@ def get_db():
 
 def init_db():
     conn = get_db()
+    # Create table if it doesn't exist
     conn.execute("""
         CREATE TABLE IF NOT EXISTS licences (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,9 +37,14 @@ def init_db():
             email       TEXT NOT NULL,
             order_id    TEXT UNIQUE NOT NULL,
             created_at  TEXT NOT NULL,
-            used        INTEGER DEFAULT 0
+            active      INTEGER DEFAULT 1
         )
     """)
+    # Add active column if upgrading from old schema
+    try:
+        conn.execute("ALTER TABLE licences ADD COLUMN active INTEGER DEFAULT 1")
+    except:
+        pass  # Column already exists
     conn.commit()
     conn.close()
 
@@ -50,12 +53,11 @@ def create_licence(email: str, order_id: str) -> str:
     conn = get_db()
     try:
         conn.execute(
-            "INSERT INTO licences (key, email, order_id, created_at) VALUES (?, ?, ?, ?)",
+            "INSERT INTO licences (key, email, order_id, created_at, active) VALUES (?, ?, ?, ?, 1)",
             (key, email, order_id, datetime.utcnow().isoformat())
         )
         conn.commit()
     except sqlite3.IntegrityError:
-        # Order already processed — look up existing key
         row = conn.execute(
             "SELECT key FROM licences WHERE order_id = ?", (order_id,)
         ).fetchone()
@@ -66,16 +68,36 @@ def create_licence(email: str, order_id: str) -> str:
 
 def verify_licence_key(key: str) -> bool:
     conn = get_db()
+    # Key must exist AND be active
     row = conn.execute(
-        "SELECT id FROM licences WHERE key = ?", (key,)
+        "SELECT id FROM licences WHERE key = ? AND active = 1", (key,)
     ).fetchone()
     conn.close()
     return row is not None
 
+def deactivate_licence_key(key: str) -> bool:
+    conn = get_db()
+    cursor = conn.execute(
+        "UPDATE licences SET active = 0 WHERE key = ?", (key,)
+    )
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
+def reactivate_licence_key(key: str) -> bool:
+    conn = get_db()
+    cursor = conn.execute(
+        "UPDATE licences SET active = 1 WHERE key = ?", (key,)
+    )
+    conn.commit()
+    affected = cursor.rowcount
+    conn.close()
+    return affected > 0
+
 # ─── Email ────────────────────────────────────────────────────────────────────
 
 async def send_licence_email(email: str, key: str):
-    """Send licence key to buyer via Resend."""
     async with httpx.AsyncClient() as client:
         response = await client.post(
             "https://api.resend.com/emails",
@@ -106,8 +128,34 @@ async def send_licence_email(email: str, key: str):
                     <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
                     <p style="font-size: 12px; color: #999;">
                         Questions? Reply to this email.<br>
-                        Source code: <a href="https://github.com/yourusername/coursescribe">GitHub</a>
+                        Source code: <a href="https://github.com/alexwoon1998/coursescribe">GitHub</a>
                     </p>
+                </div>
+                """
+            }
+        )
+        return response.status_code == 200
+
+async def send_refund_email(email: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": FROM_EMAIL,
+                "to": email,
+                "subject": "Your CourseScribe Refund",
+                "html": """
+                <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+                    <h2 style="color: #1a56db;">CourseScribe</h2>
+                    <p>Your refund has been processed and your licence key has been deactivated.</p>
+                    <p>If you believe this was a mistake or would like to try again,
+                    please reply to this email and we'll be happy to help.</p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;">
+                    <p style="font-size: 12px; color: #999;">CourseScribe Support</p>
                 </div>
                 """
             }
@@ -120,8 +168,8 @@ app = FastAPI(title="CourseScribe Licence Server")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Chrome extensions don't have a fixed origin
-    allow_methods=["POST"],
+    allow_origins=["*"],
+    allow_methods=["POST", "GET"],
     allow_headers=["Content-Type"],
 )
 
@@ -132,17 +180,15 @@ def startup():
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-# Health check — Railway uses this to confirm the server is alive
 @app.get("/")
 def health():
     return { "status": "ok", "service": "CourseScribe Licence Server" }
 
-# Gumroad webhook — fires when someone completes a purchase
+# Gumroad webhook — fires on purchase
 @app.post("/webhook/gumroad")
 async def gumroad_webhook(request: Request):
     form = await request.form()
 
-    # Verify it's a real sale (not refunded or disputed)
     sale_type = form.get("resource_name")
     if sale_type != "sale":
         return { "status": "ignored" }
@@ -153,21 +199,17 @@ async def gumroad_webhook(request: Request):
     if not email or not order_id:
         raise HTTPException(status_code=400, detail="Missing email or order_id")
 
-    # Generate licence key
     key = create_licence(email, order_id)
     if not key:
         raise HTTPException(status_code=500, detail="Failed to create licence")
 
-    # Send key to buyer
     sent = await send_licence_email(email, key)
     if not sent:
-        # Key was created — log the failure but don't crash
-        # You can manually resend from the database if needed
         print(f"WARNING: Email failed to send for order {order_id} ({email})")
 
     return { "status": "ok", "email": email }
 
-# Verify licence — called by the Chrome extension
+# Verify licence — called by Chrome extension
 class VerifyRequest(BaseModel):
     key: str
 
@@ -176,11 +218,7 @@ def verify(body: VerifyRequest):
     is_valid = verify_licence_key(body.key.strip())
     return { "valid": is_valid }
 
-# ─── Manual key generation (admin use only) ───────────────────────────────────
-# Use this to manually issue a key — call it from your terminal with curl:
-# curl -X POST https://your-app.up.railway.app/admin/generate \
-#      -H "Content-Type: application/json" \
-#      -d '{"email": "someone@example.com", "order_id": "manual-001", "secret": "YOUR_ADMIN_SECRET"}'
+# ─── Admin endpoints ──────────────────────────────────────────────────────────
 
 class AdminGenerateRequest(BaseModel):
     email: str
@@ -194,3 +232,37 @@ def admin_generate(body: AdminGenerateRequest):
         raise HTTPException(status_code=403, detail="Forbidden")
     key = create_licence(body.email, body.order_id)
     return { "key": key, "email": body.email }
+
+class AdminKeyRequest(BaseModel):
+    key: str
+    secret: str
+
+@app.post("/admin/deactivate")
+async def admin_deactivate(body: AdminKeyRequest):
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret or body.secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    # Look up email before deactivating so we can notify them
+    conn = get_db()
+    row = conn.execute(
+        "SELECT email FROM licences WHERE key = ?", (body.key,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Key not found")
+    success = deactivate_licence_key(body.key)
+    if success:
+        # Send refund notification email
+        await send_refund_email(row["email"])
+        return { "status": "deactivated", "key": body.key, "email": row["email"] }
+    raise HTTPException(status_code=500, detail="Failed to deactivate key")
+
+@app.post("/admin/reactivate")
+def admin_reactivate(body: AdminKeyRequest):
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret or body.secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    success = reactivate_licence_key(body.key)
+    if success:
+        return { "status": "reactivated", "key": body.key }
+    raise HTTPException(status_code=404, detail="Key not found")
