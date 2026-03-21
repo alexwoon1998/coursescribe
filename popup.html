@@ -63,7 +63,7 @@
 
   <!-- Action buttons -->
   <div class="actions">
-    <button class="btn-primary" id="extractBtn">Extract This Video</button>
+    <button class="btn-primary" id="extractBtn">Extract This Video / Page</button>
     <button class="btn-secondary" id="nextBtn" style="display:none;">Next Video →</button>
     <button class="btn-danger" id="stopBtn" style="display:none;">Stop</button>
   </div>
@@ -75,14 +75,17 @@
     <button class="download-btn" id="downloadBtn" style="display:none;">
       ⬇ Download All Files
     </button>
+    <button class="btn-danger" id="clearBtn" style="display:none;">✕ Clear &amp; Start Over</button>
   </div>
 
   <!-- Footer -->
   <div class="footer">
-    <a href="https://github.com" target="_blank">View source on GitHub</a>
+    <a href="https://github.com/alexwoon1998/coursescribe" target="_blank">View source on GitHub</a>
   </div>
 
   <script src="jszip.min.js"></script>
+  <script src="docx.min.js"></script>
+  <script src="html2pdf.min.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

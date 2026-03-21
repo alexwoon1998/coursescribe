@@ -403,7 +403,7 @@ autoToggle.addEventListener("change", () => {
     extractBtn.textContent = "Start Auto Extraction";
   } else {
     modeHint.textContent = 'Click "Next Video" yourself after each extraction.';
-    extractBtn.textContent = "Extract This Video";
+    extractBtn.textContent = "Extract This Video / Page";
     nextBtn.style.display = isRunning ? "block" : "none";
   }
 });
