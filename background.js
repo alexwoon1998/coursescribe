@@ -4,7 +4,7 @@
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const LICENCE_VERIFY_URL = "https://your-app.up.railway.app/verify"; // update after deploying server
+const LICENCE_VERIFY_URL = "https://coursescribe-production.up.railway.app/verify"; // update after deploying server
 
 // ─── Message listener ─────────────────────────────────────────────────────────
 
