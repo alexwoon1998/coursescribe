@@ -3,7 +3,7 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const FREE_LIMIT = 20;
-const LICENCE_VERIFY_URL = ""https://coursescribe-production.up.railway.app/verify"; // update after deploying server
+const LICENCE_VERIFY_URL = "https://coursescribe-production.up.railway.app/verify"; // update after deploying server
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
