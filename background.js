@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // OPEN_GUMROAD — opens the Gumroad purchase page in a new tab
   if (message.action === "openGumroad") {
-    chrome.tabs.create({ url: "https://gumroad.com/l/coursescribe" }); // update with your real Gumroad link
+    chrome.tabs.create({ url: "https://alexhzwoon.gumroad.com/l/coursescribe" }); // update with your real Gumroad link
     sendResponse({ success: true });
     return true;
   }
@@ -51,7 +51,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === "install") {
     // First time install — open a welcome page
     chrome.tabs.create({
-      url: "https://github.com/yourusername/coursescribe" // update with your real GitHub link
+      url: "https://github.com/alexwoon1998/coursescribe" // update with your real GitHub link
     });
   }
 });
