@@ -1,5 +1,7 @@
 licence-server/.env
+license-server/.python-version
 __pycache__/
+*.env
 *.pyc
 *.pyo
 *.db
