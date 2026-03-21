@@ -3,13 +3,13 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const FREE_LIMIT = 20;
-const LICENCE_VERIFY_URL = "https://coursescribe-production.up.railway.app/verify"; // update after deploying server
+const LICENCE_VERIFY_URL = "https://coursescribe-production.up.railway.app/verify";
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
 let isRunning = false;
 let shouldStop = false;
-let collectedFiles = []; // { title, content, format, index }
+let collectedFiles = [];
 
 // ─── DOM References ──────────────────────────────────────────────────────────
 
@@ -28,6 +28,7 @@ const stopBtn = document.getElementById("stopBtn");
 const logSection = document.getElementById("logSection");
 const logBox = document.getElementById("logBox");
 const downloadBtn = document.getElementById("downloadBtn");
+const clearBtn = document.getElementById("clearBtn");
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -69,6 +70,33 @@ function getStorage(keys) {
 
 function setStorage(data) {
   return new Promise(resolve => chrome.storage.local.set(data, resolve));
+}
+
+// ─── Collected files persistence ─────────────────────────────────────────────
+
+async function saveCollectedFiles() {
+  await setStorage({ collectedFiles: JSON.stringify(collectedFiles) });
+}
+
+async function loadCollectedFiles() {
+  try {
+    const data = await getStorage(["collectedFiles"]);
+    if (data.collectedFiles) {
+      collectedFiles = JSON.parse(data.collectedFiles);
+      if (collectedFiles.length > 0) {
+        logSection.style.display = "block";
+        logBox.innerHTML = "";
+        collectedFiles.forEach(f => {
+          log(`✓ ${f.index}. ${sanitizeFilename(f.title)}`, "success");
+        });
+        log(`\n${collectedFiles.length} file(s) ready — click Download to save.`, "success");
+        downloadBtn.style.display = "block";
+        clearBtn.style.display = "block";
+      }
+    }
+  } catch {
+    collectedFiles = [];
+  }
 }
 
 // ─── Licence logic ────────────────────────────────────────────────────────────
@@ -129,26 +157,59 @@ function generateContent(title, transcript) {
 }
 
 function getExtension(format) {
-  // v1.0 — all formats save as txt content
-  // v1.1 will add true DOCX/PDF binary generation
-  if (format === "pdf") return "txt";
   return format;
+}
+
+async function generatePdf(title, transcript) {
+  const element = document.createElement("div");
+  element.style.cssText = `
+    font-family: Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 20px;
+    color: #000;
+  `;
+  element.innerHTML = `
+    <h1 style="font-size:18px; font-weight:bold; margin-bottom:16px;">${title}</h1>
+    <hr style="margin-bottom:16px;">
+    <div>${transcript.split("\n").map(line => 
+      line.trim() ? `<p style="margin:4px 0;">${line}</p>` : `<br>`
+    ).join("")}</div>
+  `;
+
+  const opt = {
+    margin: 15,
+    filename: `${sanitizeFilename(title)}.pdf`,
+    image: { type: "jpeg", quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: "mm", format: "a4", orientation: "portrait" }
+  };
+
+  return await html2pdf().set(opt).from(element).outputPdf("blob");
 }
 
 // ─── ZIP download ─────────────────────────────────────────────────────────────
 
 async function downloadAsZip(files) {
   if (files.length === 0) return;
-
   const zip = new JSZip();
   const folder = zip.folder("CourseScribe Transcripts");
 
-  files.forEach(f => {
-    const ext = getExtension(f.format);
+  await Promise.all(files.map(async (f) => {
     const prefix = String(f.index).padStart(2, "0");
-    const filename = `${prefix} - ${sanitizeFilename(f.title)}.${ext}`;
-    folder.file(filename, generateContent(f.title, f.content));
-  });
+    const filename = `${prefix} - ${sanitizeFilename(f.title)}.${f.format}`;
+    let blob;
+
+    if (f.format === "docx") {
+      blob = await generateDocx(f.title, f.content);
+    } else if (f.format === "pdf") {
+      blob = await generatePdf(f.title, f.content);
+    } else {
+      blob = new Blob([generateContent(f.title, f.content)], { type: "text/plain" });
+    }
+
+    folder.file(filename, blob);
+  }));
 
   const blob = await zip.generateAsync({ type: "blob" });
   const url = URL.createObjectURL(blob);
@@ -159,16 +220,24 @@ async function downloadAsZip(files) {
   URL.revokeObjectURL(url);
 }
 
-// Single file download (manual mode)
-function downloadSingleFile(title, transcript, format, index) {
-  const ext = getExtension(format);
+// Single file download (manual mode — immediate, no ZIP)
+async function downloadSingleFile(title, transcript, format, index) {
   const prefix = String(index).padStart(2, "0");
-  const content = generateContent(title, transcript);
-  const blob = new Blob([content], { type: "text/plain" });
+  const safeName = sanitizeFilename(title);
+  let blob;
+
+  if (format === "docx") {
+    blob = await generateDocx(title, transcript);
+  } else if (format === "pdf") {
+    blob = await generatePdf(title, transcript);
+  } else {
+    blob = new Blob([generateContent(title, transcript)], { type: "text/plain" });
+  }
+
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${prefix} - ${sanitizeFilename(title)}.${ext}`;
+  a.download = `${prefix} - ${safeName}.${format}`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -226,12 +295,15 @@ async function extractCurrentVideo(index, silentMode = false) {
       index: fileIndex
     });
 
+    // Persist collected files so they survive popup close
+    await saveCollectedFiles();
+
     await incrementVideoCount();
     log(`✓ ${fileIndex}. ${sanitizeFilename(response.title)}`, "success");
 
     // Only trigger immediate download in manual mode
     if (!silentMode) {
-      downloadSingleFile(response.title, response.transcript, format, fileIndex);
+      await downloadSingleFile(response.title, response.transcript, format, fileIndex);
     }
 
     return { success: true, isEndOfCourse: response.isEndOfCourse };
@@ -258,6 +330,7 @@ async function goToNextVideo() {
 async function runAutoMode() {
   shouldStop = false;
   collectedFiles = [];
+  await saveCollectedFiles();
   setButtonState(true);
   log("▶ Auto mode — collecting transcripts silently...");
 
@@ -289,6 +362,7 @@ async function runAutoMode() {
   if (collectedFiles.length > 0) {
     log(`\n✅ ${collectedFiles.length} transcript(s) collected. Click Download to save.`, "success");
     downloadBtn.style.display = "block";
+    clearBtn.style.display = "block";
   }
 }
 
@@ -336,15 +410,16 @@ autoToggle.addEventListener("change", () => {
 
 extractBtn.addEventListener("click", async () => {
   collectedFiles = [];
+  await saveCollectedFiles();
   logBox.innerHTML = "";
   downloadBtn.style.display = "none";
+  clearBtn.style.display = "none";
 
   if (autoToggle.checked) {
     await runAutoMode();
   } else {
     setButtonState(true);
-    const result = await extractCurrentVideo(collectedFiles.length + 1, false);
-    if (result.success) downloadBtn.style.display = "block";
+    await extractCurrentVideo(1, false); // immediate download, no ZIP
     setButtonState(false);
   }
 });
@@ -371,6 +446,16 @@ downloadBtn.addEventListener("click", async () => {
   downloadBtn.disabled = false;
 });
 
+clearBtn.addEventListener("click", async () => {
+  collectedFiles = [];
+  await setStorage({ collectedFiles: "[]" });
+  logBox.innerHTML = "";
+  downloadBtn.style.display = "none";
+  clearBtn.style.display = "none";
+  log("Cleared. Ready to start again.");
+});
+
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 loadLicenceState();
+loadCollectedFiles();
