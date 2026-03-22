@@ -274,7 +274,7 @@ async function extractCurrentVideo(index, silentMode = false) {
     const response = await sendMessageToTab({ action: "getTranscript" });
 
     if (!response) {
-      log("✗ Could not connect to page. Make sure you are on a Coursera video page.", "error");
+      log("✗ Could not connect to page. Make sure you are on a Coursera video page. Please refresh the current page and try again.", "error");
       return { success: false, reason: "no_connection" };
     }
 
@@ -309,7 +309,7 @@ async function extractCurrentVideo(index, silentMode = false) {
     return { success: true, isEndOfCourse: response.isEndOfCourse };
 
   } catch (err) {
-    log(`✗ Error: ${err.message}`, "error");
+    log(`✗ Error: ${err.message}. Please refresh the current page and try again.`, "error");
     return { success: false, reason: "error" };
   }
 }
