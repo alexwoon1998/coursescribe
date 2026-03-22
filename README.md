@@ -6,7 +6,10 @@ as TXT, DOCX, or PDF files — directly from your browser.
 ## Features
 - Auto mode: loops through all videos silently, downloads one ZIP at the end
 - Manual mode: extract one video at a time
+- Extracts video transcripts, summary, and reading pages
+- Automatically skips pages without a video or reading content
 - Supports TXT, DOCX, and PDF output
+- Popup can be closed and reopened — collected files are preserved
 - Free for 20 videos — $20 one-time for unlimited use
 
 ## Privacy & Security
@@ -28,8 +31,6 @@ that handles purchase verification.
 See licence-server/requirements.txt for dependencies.
 
 ## Roadmap
-- v1.1 — Extract summary and reading pages
-- v1.2 — True DOCX and PDF binary output  
 - v2.0 — Udemy support
 
 ## Licence
