@@ -170,6 +170,26 @@ function getExtension(format) {
   return format;
 }
 
+async function generateDocx(title, transcript) {
+  const doc = new docx.Document({
+    sections: [{
+      children: [
+        new docx.Paragraph({
+          children: [new docx.TextRun({ text: title, bold: true, size: 36 })],
+          spacing: { after: 200 }
+        }),
+        ...transcript.split("\n").map(line =>
+          new docx.Paragraph({
+            children: [new docx.TextRun({ text: line, size: 24 })],
+            spacing: { after: 80 }
+          })
+        )
+      ]
+    }]
+  });
+  return await docx.Packer.toBlob(doc);
+}
+
 async function generatePdf(title, transcript) {
   const element = document.createElement("div");
   element.style.cssText = `
