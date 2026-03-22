@@ -45,6 +45,16 @@ function log(message, type = "normal") {
   if (type === "error")   entry.className = "log-entry-error";
   logBox.appendChild(entry);
   logBox.scrollTop = logBox.scrollHeight;
+  return entry;
+}
+
+function replaceLog(entry, message, type = "normal") {
+  entry.textContent = message;
+  entry.className = "";
+  if (type === "success") entry.className = "log-entry-success";
+  if (type === "skip")    entry.className = "log-entry-skip";
+  if (type === "error")   entry.className = "log-entry-error";
+  logBox.scrollTop = logBox.scrollHeight;
 }
 
 function sanitizeFilename(name) {
@@ -270,17 +280,19 @@ async function extractCurrentVideo(index, silentMode = false) {
     return { success: false, reason: "limit_reached" };
   }
 
+  const searchingEntry = log("⏳ Searching for video / reading content...");
+
   try {
     const response = await sendMessageToTab({ action: "getTranscript" });
 
     if (!response) {
-      log("✗ Could not connect to page. Make sure you are on a Coursera video page. Please refresh the current page and try again.", "error");
+      replaceLog(searchingEntry, "✗ Could not connect to page. Make sure you are on a Coursera video page. Please refresh the current page and try again.", "error");
       return { success: false, reason: "no_connection" };
     }
 
     if (!response.success) {
       if (response.reason === "no_transcript") {
-        log("↷ No transcript — skipping.", "skip");
+        replaceLog(searchingEntry, "↷ No transcript — skipping.", "skip");
         return { success: false, reason: "no_transcript", isEndOfCourse: response.isEndOfCourse };
       }
     }
@@ -299,7 +311,7 @@ async function extractCurrentVideo(index, silentMode = false) {
     await saveCollectedFiles();
 
     await incrementVideoCount();
-    log(`✓ ${fileIndex}. ${sanitizeFilename(response.title)}`, "success");
+    replaceLog(searchingEntry, `✓ ${fileIndex}. ${sanitizeFilename(response.title)}`, "success");
 
     // Only trigger immediate download in manual mode
     if (!silentMode) {
@@ -309,7 +321,7 @@ async function extractCurrentVideo(index, silentMode = false) {
     return { success: true, isEndOfCourse: response.isEndOfCourse };
 
   } catch (err) {
-    log(`✗ Error: ${err.message}. Please refresh the current page and try again.`, "error");
+    replaceLog(searchingEntry, `✗ Error: ${err.message}. Please refresh the current page and try again.`, "error");
     return { success: false, reason: "error" };
   }
 }
