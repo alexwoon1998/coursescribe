@@ -5,8 +5,7 @@
   "description": "Automatically extract and save Coursera video transcripts as DOCX, PDF, or TXT files.",
 
   "permissions": [
-    "storage",
-    "tabs"
+    "storage"
   ],
 
   "host_permissions": [
@@ -42,7 +41,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["jszip.min.js"],
+      "resources": ["jszip.min.js", "docx.min.js", "html2pdf.min.js"],
       "matches": ["https://www.coursera.org/*"]
     }
   ]
