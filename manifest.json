@@ -41,7 +41,7 @@
 
   "web_accessible_resources": [
     {
-      "resources": ["jszip.min.js", "docx.min.js", "html2pdf.min.js"],
+      "resources": ["jszip.min.js", "docx.min.js", "html2pdf.min.js", "pdfobject.min.js"],
       "matches": ["https://www.coursera.org/*"]
     }
   ]
