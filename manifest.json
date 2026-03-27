@@ -9,7 +9,8 @@
   ],
 
   "host_permissions": [
-    "https://www.coursera.org/*"
+    "https://www.coursera.org/*",
+    "https://coursescribe-production.up.railway.app/*"
   ],
 
   "action": {
