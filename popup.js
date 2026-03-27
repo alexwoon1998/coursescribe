@@ -199,11 +199,14 @@ async function generatePdf(title, transcript) {
     padding: 20px;
     color: #000;
   `;
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
   element.innerHTML = `
-    <h1 style="font-size:18px; font-weight:bold; margin-bottom:16px;">${title}</h1>
+    <h1 style="font-size:18px; font-weight:bold; margin-bottom:16px;">${escapeHtml(title)}</h1>
     <hr style="margin-bottom:16px;">
-    <div>${transcript.split("\n").map(line => 
-      line.trim() ? `<p style="margin:4px 0;">${line}</p>` : `<br>`
+    <div>${transcript.split("\n").map(line =>
+      line.trim() ? `<p style="margin:4px 0;">${escapeHtml(line)}</p>` : `<br>`
     ).join("")}</div>
   `;
 

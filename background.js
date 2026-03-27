@@ -45,13 +45,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 });
 
-// ─── Installation handler ─────────────────────────────────────────────────────
-
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === "install") {
-    // First time install — open a welcome page
-    chrome.tabs.create({
-      url: "https://github.com/alexwoon1998/coursescribe" // update with your real GitHub link
-    });
-  }
-});
