@@ -16,9 +16,10 @@ load_dotenv()
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-FROM_EMAIL     = os.getenv("FROM_EMAIL", "noreply@alexhzwoon.cc")
-DB_PATH        = os.getenv("DB_PATH", "licences.db")
+RESEND_API_KEY    = os.getenv("RESEND_API_KEY")
+FROM_EMAIL        = os.getenv("FROM_EMAIL", "noreply@alexhzwoon.cc")
+DB_PATH           = os.getenv("DB_PATH", "licences.db")
+GUMROAD_SELLER_ID = os.getenv("GUMROAD_SELLER_ID")
 
 # ─── Database ─────────────────────────────────────────────────────────────────
 
@@ -188,6 +189,11 @@ def health():
 @app.post("/webhook/gumroad")
 async def gumroad_webhook(request: Request):
     form = await request.form()
+
+    # Verify the request is from our Gumroad account
+    seller_id = form.get("seller_id")
+    if not GUMROAD_SELLER_ID or seller_id != GUMROAD_SELLER_ID:
+        raise HTTPException(status_code=401, detail="Unauthorized webhook request")
 
     sale_type = form.get("resource_name")
     if sale_type != "sale":
