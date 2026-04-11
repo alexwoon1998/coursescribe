@@ -239,6 +239,30 @@ def admin_generate(body: AdminGenerateRequest):
     key = create_licence(body.email, body.order_id)
     return { "key": key, "email": body.email }
 
+class AdminInsertRequest(BaseModel):
+    key: str
+    email: str
+    order_id: str
+    secret: str
+
+@app.post("/admin/insert")
+def admin_insert(body: AdminInsertRequest):
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret or body.secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO licences (key, email, order_id, created_at, active) VALUES (?, ?, ?, ?, 1)",
+            (body.key, body.email, body.order_id, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=409, detail="Key or order_id already exists")
+    conn.close()
+    return { "key": body.key, "email": body.email }
+
 class AdminKeyRequest(BaseModel):
     key: str
     secret: str
