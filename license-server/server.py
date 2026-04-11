@@ -232,12 +232,15 @@ class AdminGenerateRequest(BaseModel):
     secret: str
 
 @app.post("/admin/generate")
-def admin_generate(body: AdminGenerateRequest):
+async def admin_generate(body: AdminGenerateRequest):
     admin_secret = os.getenv("ADMIN_SECRET")
     if not admin_secret or body.secret != admin_secret:
         raise HTTPException(status_code=403, detail="Forbidden")
     key = create_licence(body.email, body.order_id)
-    return { "key": key, "email": body.email }
+    if not key:
+        raise HTTPException(status_code=500, detail="Failed to create licence")
+    sent = await send_licence_email(body.email, key)
+    return { "key": key, "email": body.email, "email_sent": sent }
 
 class AdminInsertRequest(BaseModel):
     key: str
