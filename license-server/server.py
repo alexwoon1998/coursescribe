@@ -272,3 +272,20 @@ def admin_reactivate(body: AdminKeyRequest):
     if success:
         return { "status": "reactivated", "key": body.key }
     raise HTTPException(status_code=404, detail="Key not found")
+
+@app.get("/admin/licenses")
+def admin_list_licenses(secret: str, email: str = None):
+    admin_secret = os.getenv("ADMIN_SECRET")
+    if not admin_secret or secret != admin_secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    conn = get_db()
+    if email:
+        rows = conn.execute(
+            "SELECT key, email, order_id, created_at, active FROM licences WHERE email = ?", (email,)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT key, email, order_id, created_at, active FROM licences"
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
