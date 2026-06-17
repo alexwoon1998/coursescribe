@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CourseScribe",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Automatically extract and save Coursera video transcripts as DOCX, PDF, or TXT files.",
 
   "permissions": [
