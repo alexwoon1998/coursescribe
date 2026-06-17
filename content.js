@@ -1,12 +1,36 @@
-// content.js — runs on every Coursera page
-// Listens for messages from popup.js and responds with transcript data
+// content.js — runs on every Coursera lesson page
+// Listens for messages from popup.js and responds with transcript / reading data
+//
+// Note on the 2024+ Coursera redesign:
+// The Transcript / Notes / Files controls now live in a right-hand side panel.
+// The active tab is indicated with aria-pressed (it used to be aria-selected),
+// and re-clicking the active tab toggles the panel closed — so we must only
+// click the Transcript tab when it is NOT already active.
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+function isReadingPage() {
+  // Reading / summary pages live under /supplement/
+  return window.location.href.includes("/supplement/");
+}
+
+function cleanText(str) {
+  // Strip zero-width spaces injected into the transcript markup, normalise nbsp
+  return str.replace(/​/g, "").replace(/ /g, " ").trim();
+}
+
 function getVideoTitle() {
-  // Try the main heading first, fall back to page title
-  const heading = document.querySelector("h1[class*='rc-RenderPlayerSlideSection']")
-    || document.querySelector(".video-name")
+  const heading = document.querySelector(".video-name")
+    || document.querySelector("#main-container h1")
+    || document.querySelector("h1");
+  if (heading) return heading.innerText.trim();
+  return document.title.split("|")[0].trim() || "Untitled";
+}
+
+function getReadingTitle() {
+  // The reading title is the first heading inside the main content area
+  const heading = document.querySelector("#main-container h1")
+    || document.querySelector('[role="main"] h1')
     || document.querySelector("h1");
   if (heading) return heading.innerText.trim();
   return document.title.split("|")[0].trim() || "Untitled";
@@ -15,38 +39,72 @@ function getVideoTitle() {
 function getTranscript() {
   const phrases = document.querySelectorAll(".rc-Phrase");
   if (!phrases || phrases.length === 0) return null;
-  return Array.from(phrases)
-    .map(p => p.innerText.trim())
+  const text = Array.from(phrases)
+    .map(p => cleanText(p.innerText))
     .filter(Boolean)
     .join("\n");
+  return text || null;
+}
+
+function getReadingContent() {
+  // Coursera renders reading bodies as CML (Coursera Markup Language)
+  const selectors = [
+    '[data-testid="cml-viewer"]',
+    ".rc-CML",
+    ".rc-DesktopSupplement .rc-CML",
+    ".item-page-content .rc-CML",
+  ];
+  for (const sel of selectors) {
+    const nodes = document.querySelectorAll(sel);
+    if (nodes.length) {
+      const text = Array.from(nodes)
+        .map(n => cleanText(n.innerText))
+        .filter(Boolean)
+        .join("\n\n");
+      if (text) return text;
+    }
+  }
+  return null;
+}
+
+// ─── Transcript tab (right-hand side panel) ──────────────────────────────────
+
+function getTranscriptTab() {
+  return document.querySelector('[data-testid="item-tool-panel-button-transcript"]')
+    || document.querySelector('button[aria-label="Transcript"]')
+    || Array.from(document.querySelectorAll("button")).find(
+        el => el.innerText.trim().toLowerCase() === "transcript"
+      );
 }
 
 function isTranscriptTabActive() {
-  // Check if the Transcript tab is the currently selected tab
-  const transcriptTab = document.querySelector('[aria-label="Transcript"]')
-    || Array.from(document.querySelectorAll("button, a")).find(
-        el => el.innerText.trim().toLowerCase() === "transcript"
-      );
-  if (!transcriptTab) return false;
-  return transcriptTab.getAttribute("aria-selected") === "true"
-    || transcriptTab.classList.contains("active")
-    || transcriptTab.classList.contains("selected");
+  // The transcript phrases being present in the DOM is the real signal that the
+  // panel is open and showing the transcript.
+  if (document.querySelector(".rc-Phrase")) return true;
+
+  const tab = getTranscriptTab();
+  if (!tab) return false;
+  // New UI uses aria-pressed; keep aria-selected/class checks for safety.
+  return tab.getAttribute("aria-pressed") === "true"
+    || tab.getAttribute("aria-selected") === "true"
+    || tab.classList.contains("active")
+    || tab.classList.contains("selected");
 }
 
-function clickTranscriptTab() {
-  const transcriptTab = document.querySelector('[aria-label="Transcript"]')
-    || Array.from(document.querySelectorAll("button, a")).find(
-        el => el.innerText.trim().toLowerCase() === "transcript"
-      );
-  if (transcriptTab) {
-    transcriptTab.click();
+function openTranscriptTab() {
+  // Only click when the transcript isn't already showing — clicking an already
+  // active tab in the new UI collapses the panel.
+  if (isTranscriptTabActive()) return true;
+  const tab = getTranscriptTab();
+  if (tab) {
+    tab.click();
     return true;
   }
   return false;
 }
 
 function isEndOfCourse() {
-  // Check for "Go to My Learning" button which appears on the last page
+  // "Go to My Learning" appears on the last page of a course
   const allButtons = Array.from(document.querySelectorAll("a, button"));
   return allButtons.some(el =>
     el.innerText.trim().toLowerCase().includes("go to my learning")
@@ -54,7 +112,6 @@ function isEndOfCourse() {
 }
 
 function clickNextVideo() {
-  // Try multiple selectors for the Next button
   const selectors = [
     '[data-track-component="next_item"]',
     'button[aria-label="Go to next item"]',
@@ -110,16 +167,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // GET_TRANSCRIPT — extract transcript from current page
+  // GET_TRANSCRIPT — extract transcript (video) or content (reading) from page
   if (message.action === "getTranscript") {
     (async () => {
-      // Try to click the transcript tab if it's not already active
+
+      // ── Reading / summary pages ──────────────────────────────────────────
+      if (isReadingPage()) {
+        const content = getReadingContent();
+        if (!content) {
+          sendResponse({
+            success: false,
+            reason: "no_transcript",
+            isEndOfCourse: isEndOfCourse()
+          });
+          return;
+        }
+        sendResponse({
+          success: true,
+          title: getReadingTitle(),
+          transcript: content,
+          isEndOfCourse: isEndOfCourse()
+        });
+        return;
+      }
+
+      // ── Video pages ──────────────────────────────────────────────────────
+      // Open the Transcript tab in the right-hand panel if it isn't already.
       if (!isTranscriptTabActive()) {
-        clickTranscriptTab();
+        openTranscriptTab();
         await new Promise(r => setTimeout(r, 1000));
       }
 
-      // Wait for transcript to appear
       const found = await waitForTranscript(8000);
 
       if (!found) {
@@ -164,10 +242,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // CHECK_PAGE — check if we're on a video page
+  // CHECK_PAGE — check if we're on a lesson page
   if (message.action === "checkPage") {
     const onCoursera = window.location.hostname === "www.coursera.org";
     const onVideoPage = window.location.href.includes("/lecture/")
+      || window.location.href.includes("/supplement/")
       || window.location.href.includes("/learn/");
     sendResponse({
       onCoursera,
